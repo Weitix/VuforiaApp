@@ -1,0 +1,151 @@
+using UnityEngine;
+using TMPro;
+using System.IO;
+using System.Text;
+using System.Net;
+using System;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
+using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Linq;
+using System.Linq;
+using Vuforia;
+using UnityEngine.Networking;
+
+
+public class BackEndManager : MonoBehaviour
+{
+
+    private string downloderLink = "https://drive.google.com/uc?export=download&id=";
+    public string JsonDB;
+    private string CardHome;
+    public string JsonDataBaseLink;
+    public List<int> _webByteSize;
+    public List<int> _localByteSize;
+    public static List<ModelData> item;
+
+    public Texture2D textureFile;
+    public float printedTargetSize;
+    public string targetName;
+
+    public string dataSetPath { get; private set; }
+
+    public void Start()
+    {
+ 
+        System.IO.Directory.CreateDirectory(Application.persistentDataPath + "/ScreenShotsFolder");
+        System.IO.Directory.CreateDirectory(Application.persistentDataPath + "/JsonDB");
+
+        JsonDB = Path.Combine(Application.persistentDataPath, "JsonDB/" + "JsonDataBase.json");
+        CardHome = Path.Combine(Application.persistentDataPath, "ScreenShotsFolder/");
+
+        VuforiaApplication.Instance.OnVuforiaInitialized += OnVuforiaInitialized;
+    }
+
+    private void Update()
+    {
+ 
+        bool ExistDB = File.Exists(JsonDB);
+
+        if (!ExistDB)
+        {
+            DownloadJson();
+
+            int haveByte = File.ReadAllBytes(JsonDB).Length;
+
+            if (haveByte == 0)
+            {
+                DownloadJson();
+            }
+        }
+
+        for (int i = 0; i < _localByteSize.Count; i++)
+        {
+            if (_localByteSize[i] == 0)
+            {
+                DeserializJsonData();
+            }
+        }
+    }
+
+    public void DownloadJson()
+    {
+        WebClient webload = new WebClient();
+        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(downloderLink + JsonDataBaseLink);
+        request.UseDefaultCredentials = true;
+
+        webload.DownloadFile(new Uri(downloderLink + JsonDataBaseLink), JsonDB);
+        DeserializJsonData();
+    }
+
+    public void DeserializJsonData()
+    {
+        string jsonData = File.ReadAllText(JsonDB);
+        item = JsonConvert.DeserializeObject<List<ModelData>>(jsonData);
+        DownloadImage(item);
+    }
+
+    public void DownloadImage(List<ModelData> item)
+    {
+
+        WebClient webload = new WebClient();
+
+        for (int i = 0; i < item.Count; i++)
+        {
+
+            bool checkCard = File.Exists(CardHome + item[i].model_name + ".jpg");
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(downloderLink + item[i].Url_Card);
+            request.UseDefaultCredentials = true;
+
+
+            if (!checkCard)
+            {
+                webload.DownloadFile(new Uri(downloderLink + item[i].Url_Card), CardHome + item[i].model_name + ".jpg");
+            }
+
+            else
+            {
+                _localByteSize[i] = File.ReadAllBytes(CardHome + item[i].model_name + ".jpg").Length;
+
+                webload.OpenRead(downloderLink + item[i].Url_Card);
+                _webByteSize[i] = Convert.ToInt32(webload.ResponseHeaders["Content-Length"]);
+                
+
+                if (_localByteSize[i] != _webByteSize[i] || _localByteSize[i] == 0)
+                {
+                    webload.DownloadFile(new Uri(downloderLink + item[i].Url_Card), CardHome + item[i].model_name + ".jpg");
+                }
+                else if (_webByteSize[i] == 0)
+                {
+                    DownloadImage(item);
+                   
+                }
+            }
+
+        }
+    }
+
+}
+
+
+
+
+
+
+public class ModelData
+{
+    [JsonProperty(PropertyName = "Model_id")]
+    public string model_id { get; set; }
+
+    [JsonProperty(PropertyName = "Model_Name")]
+    public string model_name { get; set; }
+
+    [JsonProperty(PropertyName = "Url_Card")]
+    public string Url_Card { get; set; }
+
+    [JsonProperty(PropertyName = "Url_AB")]
+    public string Url_AB { get; set; }
+}
+
+
+
